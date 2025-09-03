@@ -2,6 +2,9 @@ import Fastify from "fastify";
 import { ConfidentialClientApplication } from "@azure/msal-node";
 import axios from "axios";
 import "dotenv/config";
+import fs from "fs";
+import path from "path";
+import handlebars from "handlebars";
 
 const fastify = Fastify({ logger: true });
 
@@ -32,6 +35,14 @@ async function getAccessToken() {
 	});
 	return result.accessToken;
 }
+
+function renderTemplate(templateName, data) {
+	const filePath = "src/handlebars/" + templateName + ".hbs";
+	const source = fs.readFileSync(filePath, "utf8");
+	const template = handlebars.compile(source);
+	return template(data);
+}
+
 
 // Envia e-mail via Microsoft Graph
 async function sendEmail(subject, body, recipients) {
@@ -77,10 +88,18 @@ async function sendEmail(subject, body, recipients) {
 
 // Rota Fastify para envio de e-mail
 fastify.post("/send-email", async (request, reply) => {
-	const { subject, body, to } = request.body;
+	const { subject, resetLink, to } = request.body;
+
+	const htmlBody = renderTemplate("password-reset", {
+		nome: "Icaro",
+		resetLink,
+		ano: new Date().getFullYear(),
+	});
 
 	try {
-		const result = await sendEmail(subject, body, to);
+		console.time()
+		const result = await sendEmail(subject, htmlBody, to);
+		console.timeEnd()
 		return result;
 	} catch (err) {
 		request.log.error(err);
@@ -91,6 +110,7 @@ fastify.post("/send-email", async (request, reply) => {
 // Inicia o servidor
 const start = async () => {
 	try {
+
 		await fastify.listen({ port: 3000, host: "0.0.0.0" });
 		fastify.log.info("🚀 Servidor rodando em http://localhost:3000");
 	} catch (err) {
